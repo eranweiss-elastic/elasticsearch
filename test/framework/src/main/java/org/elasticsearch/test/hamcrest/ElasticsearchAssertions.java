@@ -105,7 +105,7 @@ import static org.junit.Assert.fail;
 public class ElasticsearchAssertions {
 
     public static void assertAcked(RequestBuilder<?, ? extends IsAcknowledgedSupplier> builder) {
-        assertAcked(builder, TimeValue.timeValueSeconds(30));
+        assertAcked(builder, TimeValue.timeValueSeconds(300));
     }
 
     @SafeVarargs

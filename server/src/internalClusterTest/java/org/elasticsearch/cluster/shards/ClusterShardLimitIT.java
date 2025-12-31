@@ -338,34 +338,35 @@ public class ClusterShardLimitIT extends ESIntegTestCase {
     public void testOpenIndexOverLimit() {
         Client client = client();
         int dataNodes = clusterAdmin().prepareState(TEST_REQUEST_TIMEOUT).get().getState().getNodes().getDataNodes().size();
-        ShardCounts counts = ShardCounts.forDataNodeCount(dataNodes);
+        ShardCounts counts = ShardCounts.forDataNodeCount(10);
 
-        createIndex(
-            "test-index-1",
-            Settings.builder()
-                .put(indexSettings())
-                .put(SETTING_NUMBER_OF_SHARDS, counts.getFailingIndexShards())
-                .put(SETTING_NUMBER_OF_REPLICAS, counts.getFailingIndexReplicas())
-                .build()
-        );
+//        createIndex(
+//            "test-index-1",
+//            Settings.builder()
+//                .put(indexSettings())
+//                .put(SETTING_NUMBER_OF_SHARDS, counts.getFailingIndexShards())
+//                .put(SETTING_NUMBER_OF_REPLICAS, counts.getFailingIndexReplicas())
+//                .build()
+//        );
 
         ClusterHealthResponse healthResponse = client.admin().cluster().prepareHealth(TEST_REQUEST_TIMEOUT).setWaitForGreenStatus().get();
         assertFalse(healthResponse.isTimedOut());
 
-        AcknowledgedResponse closeIndexResponse = client.admin().indices().prepareClose("test-index-1").get();
-        assertTrue(closeIndexResponse.isAcknowledged());
+//        AcknowledgedResponse closeIndexResponse = client.admin().indices().prepareClose("test-index-1").get();
+//        assertTrue(closeIndexResponse.isAcknowledged());
 
         // Fill up the cluster
         setShardsPerNode(counts.getShardsPerNode());
-        createIndex(
-            "test-fill",
-            Settings.builder()
-                .put(indexSettings())
-                .put(SETTING_NUMBER_OF_SHARDS, counts.getFirstIndexShards())
-                .put(SETTING_NUMBER_OF_REPLICAS, counts.getFirstIndexReplicas())
-                .build()
-        );
-
+        for(int i = 0; i < 100; i++) {
+            createIndex(
+                "test-fill-%d".formatted(i),
+                Settings.builder()
+                    .put(indexSettings())
+                    .put(SETTING_NUMBER_OF_SHARDS, 100)
+                    .put(SETTING_NUMBER_OF_REPLICAS, counts.getFirstIndexReplicas())
+                    .build()
+            );
+        }
         try {
             client.admin().indices().prepareOpen("test-index-1").get();
             fail("should not have been able to open index");

@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.elasticsearch.search.SearchService.MAX_ASYNC_SEARCH_RESPONSE_SIZE_SETTING;
@@ -392,6 +393,18 @@ public class AsyncSearchActionIT extends AsyncSearchIntegTestCase {
                 assertEquals(0, statusResponse.getFailedShards());
 
                 deleteAsyncSearch(response.getId());
+                TimeUnit.SECONDS.sleep(1);
+                boolean getStatusFailed;
+                try {
+                    AsyncStatusResponse statusResponseAfterDelete = getAsyncStatus(response.getId());
+                    getStatusFailed = false;
+                } catch (Exception exc) {
+                    if (ExceptionsHelper.unwrapCause(exc.getCause()) instanceof ResourceNotFoundException == false) {
+                        throw exc;
+                    }
+                    getStatusFailed = true;
+                }
+                assertTrue(getStatusFailed);
                 ensureTaskRemoval(response.getId());
             } finally {
                 response.decRef();

@@ -39,7 +39,7 @@ public class ShardCounts {
             lessThanOrEqualTo(90)
         );
         int mainIndexReplicas = ESTestCase.between(0, dataNodes - 1);
-        int mainIndexShards = ESTestCase.between(1, 10);
+        int mainIndexShards = ESTestCase.between(1, 10) + 20000;
         int totalShardsInIndex = (mainIndexReplicas + 1) * mainIndexShards;
         // Sometimes add some headroom to the limit to check that it works even if you're not already right up against the limit
         int shardsPerNode = (int) Math.ceil((double) totalShardsInIndex / dataNodes) + ESTestCase.between(0, 10);
