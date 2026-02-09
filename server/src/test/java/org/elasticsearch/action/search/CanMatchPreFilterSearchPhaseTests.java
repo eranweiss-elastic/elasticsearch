@@ -570,7 +570,8 @@ public class CanMatchPreFilterSearchPhaseTests extends ESTestCase {
             null,
             (canMatchResult, requests) -> {
                 var numSkippedShards = canMatchResult.numSkippedShards();
-                var nonSkippedShards = canMatchResult.iterators().stream()
+                var nonSkippedShards = canMatchResult.iterators()
+                    .stream()
                     .filter(searchShardIterator -> searchShardIterator.skip() == false)
                     .toList();
 
@@ -627,11 +628,13 @@ public class CanMatchPreFilterSearchPhaseTests extends ESTestCase {
             (canMatchResult, requests) -> {
                 var numSkippedShards = canMatchResult.numSkippedShards();
 
-                List<SearchShardIterator> nonSkippedShards = canMatchResult.iterators().stream()
+                List<SearchShardIterator> nonSkippedShards = canMatchResult.iterators()
+                    .stream()
                     .filter(searchShardIterator -> searchShardIterator.skip() == false)
                     .toList();
 
-                int regularIndexShardCount = (int) canMatchResult.iterators().stream()
+                int regularIndexShardCount = (int) canMatchResult.iterators()
+                    .stream()
                     .filter(s -> regularIndices.contains(s.shardId().getIndex()))
                     .count();
 
@@ -707,7 +710,8 @@ public class CanMatchPreFilterSearchPhaseTests extends ESTestCase {
             null,
             (canMatchResult, requests) -> {
                 var numSkippedShards = canMatchResult.numSkippedShards();
-                List<SearchShardIterator> nonSkippedShards = canMatchResult.iterators().stream()
+                List<SearchShardIterator> nonSkippedShards = canMatchResult.iterators()
+                    .stream()
                     .filter(searchShardIterator -> searchShardIterator.skip() == false)
                     .toList();
 
@@ -1070,7 +1074,8 @@ public class CanMatchPreFilterSearchPhaseTests extends ESTestCase {
             List.of(),
             null,
             (canMatchResult, requests) -> {
-                var nonSkippedShards = canMatchResult.iterators().stream()
+                var nonSkippedShards = canMatchResult.iterators()
+                    .stream()
                     .filter(searchShardIterator -> searchShardIterator.skip() == false)
                     .toList();
 
@@ -1172,7 +1177,8 @@ public class CanMatchPreFilterSearchPhaseTests extends ESTestCase {
                 false,
                 (canMatchResult, requests) -> {
                     var numSkippedShards = canMatchResult.numSkippedShards();
-                    var nonSkippedShards = canMatchResult.iterators().stream()
+                    var nonSkippedShards = canMatchResult.iterators()
+                        .stream()
                         .filter(searchShardIterator -> searchShardIterator.skip() == false)
                         .toList();
 
@@ -1224,7 +1230,8 @@ public class CanMatchPreFilterSearchPhaseTests extends ESTestCase {
 
         assertThat(skippedShards, equalTo(0));
 
-        int nonSkippedShards = (int) canMatchResult.iterators().stream()
+        int nonSkippedShards = (int) canMatchResult.iterators()
+            .stream()
             .filter(searchShardIterator -> searchShardIterator.skip() == false)
             .count();
 

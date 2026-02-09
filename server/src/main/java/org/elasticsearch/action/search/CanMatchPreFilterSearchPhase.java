@@ -472,8 +472,10 @@ final class CanMatchPreFilterSearchPhase {
             possibleMatches.set(shardIndexToQuery);
         }
         int i = 0, iMatched = 0, numMatch = possibleMatches.cardinality();
-        final CanMatchResult canMatchResult = new CanMatchResult(new ArrayList<>(Collections.nCopies(numMatch, null)),
-            shardsIts.size() - numMatch);
+        final CanMatchResult canMatchResult = new CanMatchResult(
+            new ArrayList<>(Collections.nCopies(numMatch, null)),
+            shardsIts.size() - numMatch
+        );
 
         for (SearchShardIterator iter : shardsIts) {
             iter.reset();
