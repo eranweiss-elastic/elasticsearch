@@ -81,10 +81,12 @@ public class SearchAsyncActionTests extends ESTestCase {
             replicaNode
         );
         int numSkipped = 0;
+        List<SearchShardIterator> filteredShardsIter = new ArrayList<>();
         for (SearchShardIterator iter : shardsIter) {
             if (iter.shardId().id() % 2 == 0) {
-                iter.skip(true);
                 numSkipped++;
+            } else {
+                filteredShardsIter.add(iter);
             }
         }
         CountDownLatch latch = new CountDownLatch(1);
@@ -112,11 +114,12 @@ public class SearchAsyncActionTests extends ESTestCase {
             null,
             request,
             responseListener,
-            shardsIter,
+            filteredShardsIter,
+            numSkipped,
             new TransportSearchAction.SearchTimeProvider(0, 0, () -> 0),
             ClusterState.EMPTY_STATE,
             null,
-            new ArraySearchPhaseResults<>(shardsIter.size()),
+            new ArraySearchPhaseResults<>(filteredShardsIter.size()),
             request.getMaxConcurrentShardRequests(),
             SearchResponse.Clusters.EMPTY,
             mock(SearchResponseMetrics.class),
@@ -224,6 +227,7 @@ public class SearchAsyncActionTests extends ESTestCase {
                 request,
                 ActionTestUtils.assertNoFailureListener(response -> {}),
                 shardsIter,
+                0,
                 new TransportSearchAction.SearchTimeProvider(0, 0, () -> 0),
                 ClusterState.EMPTY_STATE,
                 null,
@@ -344,6 +348,7 @@ public class SearchAsyncActionTests extends ESTestCase {
                 request,
                 responseListener,
                 shardsIter,
+                0,
                 new TransportSearchAction.SearchTimeProvider(0, 0, () -> 0),
                 ClusterState.EMPTY_STATE,
                 null,
@@ -478,6 +483,7 @@ public class SearchAsyncActionTests extends ESTestCase {
                 request,
                 responseListener,
                 shardsIter,
+                0,
                 new TransportSearchAction.SearchTimeProvider(0, 0, () -> 0),
                 ClusterState.EMPTY_STATE,
                 null,
@@ -590,6 +596,7 @@ public class SearchAsyncActionTests extends ESTestCase {
                 request,
                 ActionTestUtils.assertNoFailureListener(response -> {}),
                 shardsIter,
+                0,
                 new TransportSearchAction.SearchTimeProvider(0, 0, () -> 0),
                 ClusterState.EMPTY_STATE,
                 null,
@@ -692,11 +699,12 @@ public class SearchAsyncActionTests extends ESTestCase {
             null,
             request,
             responseListener,
-            searchShardIterators,
+            new ArrayList<>(),
+            searchShardIterators.size(),
             new TransportSearchAction.SearchTimeProvider(0, 0, () -> 0),
             ClusterState.EMPTY_STATE,
             null,
-            new ArraySearchPhaseResults<>(searchShardIterators.size()),
+            new ArraySearchPhaseResults<>(0),
             request.getMaxConcurrentShardRequests(),
             SearchResponse.Clusters.EMPTY,
             mock(SearchResponseMetrics.class),

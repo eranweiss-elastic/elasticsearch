@@ -196,7 +196,7 @@ public class TransportSearchShardsAction extends HandledTransportAction<SearchSh
                         .addListener(
                             delegate.map(
                                 its -> new SearchShardsResponse(
-                                    toGroups(its),
+                                    toGroups(its.iterators()),
                                     project.cluster().nodes().getAllNodes(),
                                     aliasFilters,
                                     searchShardsRequest.getResolvedIndexExpressions()

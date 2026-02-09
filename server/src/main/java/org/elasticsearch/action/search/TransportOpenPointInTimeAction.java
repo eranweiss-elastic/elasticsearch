@@ -301,6 +301,7 @@ public class TransportOpenPointInTimeAction extends HandledTransportAction<OpenP
             SearchRequest searchRequest,
             Executor executor,
             List<SearchShardIterator> shardIterators,
+            int numSkipped,
             TransportSearchAction.SearchTimeProvider timeProvider,
             BiFunction<String, String, Transport.Connection> connectionLookup,
             ClusterState clusterState,
@@ -333,11 +334,12 @@ public class TransportOpenPointInTimeAction extends HandledTransportAction<OpenP
                 )
                     .addListener(
                         listener.delegateFailureAndWrap(
-                            (searchResponseActionListener, searchShardIterators) -> runOpenPointInTimePhase(
+                            (searchResponseActionListener, canMatchResult) -> runOpenPointInTimePhase(
                                 task,
                                 searchRequest,
                                 executor,
-                                searchShardIterators,
+                                canMatchResult.iterators(),
+                                canMatchResult.numSkippedShards() + numSkipped,
                                 timeProvider,
                                 connectionLookup,
                                 clusterState,
@@ -354,6 +356,7 @@ public class TransportOpenPointInTimeAction extends HandledTransportAction<OpenP
                     searchRequest,
                     executor,
                     shardIterators,
+                    numSkipped,
                     timeProvider,
                     connectionLookup,
                     clusterState,
@@ -370,6 +373,7 @@ public class TransportOpenPointInTimeAction extends HandledTransportAction<OpenP
             SearchRequest searchRequest,
             Executor executor,
             List<SearchShardIterator> shardIterators,
+            int numSkipped,
             TransportSearchAction.SearchTimeProvider timeProvider,
             BiFunction<String, String, Transport.Connection> connectionLookup,
             ClusterState clusterState,
@@ -394,6 +398,7 @@ public class TransportOpenPointInTimeAction extends HandledTransportAction<OpenP
                 searchRequest,
                 listener,
                 shardIterators,
+                numSkipped,
                 timeProvider,
                 clusterState,
                 task,
