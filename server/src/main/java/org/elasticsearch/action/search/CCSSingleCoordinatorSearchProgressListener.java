@@ -64,19 +64,26 @@ public class CCSSingleCoordinatorSearchProgressListener extends SearchProgressLi
             String clusterAlias = entry.getKey();
 
             clusters.swapCluster(clusterAlias, (k, v) -> {
-                assert v.getTotalShards() == null : "total shards should not be set on a Cluster before onListShards";
+                assert Objects.equals(v.getTotalShards(), v.getSkippedShards()) :
+                    "total shards should not be set on a Cluster before onListShards, except skipped";
 
                 int totalCount = entry.getValue();
                 int skippedCount = skippedByClusterAlias.getOrDefault(k, 0);
+                if (v.getSkippedShards() != null)
+                {
+                    skippedCount += v.getSkippedShards();
+                    totalCount += v.getTotalShards();
+                }
                 TimeValue took = null;
 
                 SearchResponse.Cluster.Status status = v.getStatus();
-                assert status == SearchResponse.Cluster.Status.RUNNING : "should have RUNNING status during onListShards but has " + status;
 
                 // if all shards are marked as skipped, the search is done - mark as SUCCESSFUL
                 if (skippedCount == totalCount) {
                     took = new TimeValue(timeProvider.buildTookInMillis());
                     status = SearchResponse.Cluster.Status.SUCCESSFUL;
+                } else {
+                    assert status == SearchResponse.Cluster.Status.RUNNING : "should have RUNNING status during onListShards but has " + status;
                 }
                 return new SearchResponse.Cluster.Builder(v).setStatus(status)
                     .setTotalShards(totalCount)
