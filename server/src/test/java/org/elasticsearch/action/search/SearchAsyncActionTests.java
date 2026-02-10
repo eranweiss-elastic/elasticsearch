@@ -31,6 +31,7 @@ import org.elasticsearch.search.SearchPhaseResult;
 import org.elasticsearch.search.internal.AliasFilter;
 import org.elasticsearch.search.internal.ShardSearchContextId;
 import org.elasticsearch.test.ESTestCase;
+import org.elasticsearch.transport.RemoteClusterAware;
 import org.elasticsearch.transport.Transport;
 import org.elasticsearch.transport.TransportException;
 import org.elasticsearch.transport.TransportRequest;
@@ -115,7 +116,7 @@ public class SearchAsyncActionTests extends ESTestCase {
             request,
             responseListener,
             filteredShardsIter,
-            numSkipped,
+            new HashMap<>(Map.of(RemoteClusterAware.LOCAL_CLUSTER_GROUP_KEY, numSkipped)),
             new TransportSearchAction.SearchTimeProvider(0, 0, () -> 0),
             ClusterState.EMPTY_STATE,
             null,
@@ -227,7 +228,7 @@ public class SearchAsyncActionTests extends ESTestCase {
                 request,
                 ActionTestUtils.assertNoFailureListener(response -> {}),
                 shardsIter,
-                0,
+                Collections.emptyMap(),
                 new TransportSearchAction.SearchTimeProvider(0, 0, () -> 0),
                 ClusterState.EMPTY_STATE,
                 null,
@@ -348,7 +349,7 @@ public class SearchAsyncActionTests extends ESTestCase {
                 request,
                 responseListener,
                 shardsIter,
-                0,
+                Collections.emptyMap(),
                 new TransportSearchAction.SearchTimeProvider(0, 0, () -> 0),
                 ClusterState.EMPTY_STATE,
                 null,
@@ -483,7 +484,7 @@ public class SearchAsyncActionTests extends ESTestCase {
                 request,
                 responseListener,
                 shardsIter,
-                0,
+                Collections.emptyMap(),
                 new TransportSearchAction.SearchTimeProvider(0, 0, () -> 0),
                 ClusterState.EMPTY_STATE,
                 null,
@@ -596,7 +597,7 @@ public class SearchAsyncActionTests extends ESTestCase {
                 request,
                 ActionTestUtils.assertNoFailureListener(response -> {}),
                 shardsIter,
-                0,
+                Collections.emptyMap(),
                 new TransportSearchAction.SearchTimeProvider(0, 0, () -> 0),
                 ClusterState.EMPTY_STATE,
                 null,
@@ -666,20 +667,6 @@ public class SearchAsyncActionTests extends ESTestCase {
 
         final int numUnavailableSkippedShards = randomIntBetween(1, 10);
         List<SearchShardIterator> searchShardIterators = new ArrayList<>(numUnavailableSkippedShards);
-        OriginalIndices originalIndices = new OriginalIndices(new String[] { "idx" }, SearchRequest.DEFAULT_INDICES_OPTIONS);
-        for (int i = 0; i < numUnavailableSkippedShards; i++) {
-            Index index = new Index("idx", "_na_");
-            SearchShardIterator searchShardIterator = new SearchShardIterator(
-                null,
-                new ShardId(index, 0),
-                Collections.emptyList(),
-                originalIndices,
-                SplitShardCountSummary.UNSET
-            );
-            // Skip all the shards
-            searchShardIterator.skip(true);
-            searchShardIterators.add(searchShardIterator);
-        }
         Map<String, Transport.Connection> lookup = Map.of(primaryNode.getId(), new MockConnection(primaryNode));
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -699,8 +686,8 @@ public class SearchAsyncActionTests extends ESTestCase {
             null,
             request,
             responseListener,
-            new ArrayList<>(),
-            searchShardIterators.size(),
+            searchShardIterators,
+            Map.of(RemoteClusterAware.LOCAL_CLUSTER_GROUP_KEY, numUnavailableSkippedShards),
             new TransportSearchAction.SearchTimeProvider(0, 0, () -> 0),
             ClusterState.EMPTY_STATE,
             null,
@@ -740,7 +727,7 @@ public class SearchAsyncActionTests extends ESTestCase {
         assertNotNull(searchResponse.get());
         assertThat(searchResponse.get().getSkippedShards(), equalTo(numUnavailableSkippedShards));
         assertThat(searchResponse.get().getFailedShards(), equalTo(0));
-        assertThat(searchResponse.get().getSuccessfulShards(), equalTo(searchShardIterators.size()));
+        assertThat(searchResponse.get().getSuccessfulShards(), equalTo(numUnavailableSkippedShards));
     }
 
     static List<SearchShardIterator> getShardsIter(

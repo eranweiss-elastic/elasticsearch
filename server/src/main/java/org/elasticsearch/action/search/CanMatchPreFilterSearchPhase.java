@@ -60,7 +60,7 @@ final class CanMatchPreFilterSearchPhase {
 
     private static final String PHASE_NAME = "can_match";
 
-    public record CanMatchResult(List<SearchShardIterator> iterators, int numSkippedShards) {}
+    public record CanMatchResult(List<SearchShardIterator> iterators, Map<String, Integer> skippedByClusterAlias) {}
 
     private final Logger logger;
     private final SearchRequest request;
@@ -143,7 +143,7 @@ final class CanMatchPreFilterSearchPhase {
         Map<String, Object> searchRequestAttributes
     ) {
         if (shardsIts.isEmpty()) {
-            return SubscribableListener.newSucceeded(new CanMatchResult(List.of(), 0));
+            return SubscribableListener.newSucceeded(new CanMatchResult(List.of(), HashMap.newHashMap(0)));
         }
         final SubscribableListener<CanMatchResult> listener = new SubscribableListener<>();
         long phaseStartTimeInNanos = System.nanoTime();
@@ -474,7 +474,7 @@ final class CanMatchPreFilterSearchPhase {
         int i = 0, iMatched = 0, numMatch = possibleMatches.cardinality();
         final CanMatchResult canMatchResult = new CanMatchResult(
             new ArrayList<>(Collections.nCopies(numMatch, null)),
-            shardsIts.size() - numMatch
+            new HashMap<>()
         );
 
         for (SearchShardIterator iter : shardsIts) {
@@ -483,6 +483,8 @@ final class CanMatchPreFilterSearchPhase {
             if (match) {
                 assert iter.skip() == false;
                 canMatchResult.iterators.set(iMatched++, iter);
+            } else {
+                canMatchResult.skippedByClusterAlias.compute(iter.getClusterAlias(), (k, v) -> v == null ? 1 : v + 1);
             }
         }
         // order matching shard by the natural order, so that search results will use that order
@@ -516,7 +518,7 @@ final class CanMatchPreFilterSearchPhase {
         for (Integer integer : toSort) {
             list.add(canMatchResult.iterators.get(integer));
         }
-        return new CanMatchResult(list, canMatchResult.numSkippedShards);
+        return new CanMatchResult(list, canMatchResult.skippedByClusterAlias);
     }
 
     private static boolean shouldSortShards(MinAndMax<?>[] minAndMaxes) {

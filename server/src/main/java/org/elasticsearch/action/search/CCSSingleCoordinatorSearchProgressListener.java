@@ -38,14 +38,14 @@ public class CCSSingleCoordinatorSearchProgressListener extends SearchProgressLi
      * Executed when shards are ready to be queried (after can-match)
      *
      * @param shards The list of shards to query.
-     * @param skipped The list of skipped shards.
+     * @param skippedByClusterAlias The number of skipped shards per cluster.
      * @param clusters The statistics for remote clusters included in the search.
      * @param fetchPhase <code>true</code> if the search needs a fetch phase, <code>false</code> otherwise.
      **/
     @Override
     public void onListShards(
         List<SearchShard> shards,
-        List<SearchShard> skipped,
+        Map<String, Integer> skippedByClusterAlias,
         SearchResponse.Clusters clusters,
         boolean fetchPhase,
         TransportSearchAction.SearchTimeProvider timeProvider
@@ -56,7 +56,6 @@ public class CCSSingleCoordinatorSearchProgressListener extends SearchProgressLi
         this.timeProvider = timeProvider;
 
         // Partition by clusterAlias and get counts
-        Map<String, Integer> skippedByClusterAlias = partitionCountsByClusterAlias(skipped);
         // the 'shards' list does not include the shards in the 'skipped' list, so combine counts from both to get total
         Map<String, Integer> totalByClusterAlias = partitionCountsByClusterAlias(shards);
         skippedByClusterAlias.forEach((cluster, count) -> totalByClusterAlias.merge(cluster, count, Integer::sum));

@@ -301,7 +301,7 @@ public class TransportOpenPointInTimeAction extends HandledTransportAction<OpenP
             SearchRequest searchRequest,
             Executor executor,
             List<SearchShardIterator> shardIterators,
-            int numSkipped,
+            Map<String, Integer> skippedByClusterAlias,
             TransportSearchAction.SearchTimeProvider timeProvider,
             BiFunction<String, String, Transport.Connection> connectionLookup,
             ClusterState clusterState,
@@ -334,20 +334,25 @@ public class TransportOpenPointInTimeAction extends HandledTransportAction<OpenP
                 )
                     .addListener(
                         listener.delegateFailureAndWrap(
-                            (searchResponseActionListener, canMatchResult) -> runOpenPointInTimePhase(
-                                task,
-                                searchRequest,
-                                executor,
-                                canMatchResult.iterators(),
-                                canMatchResult.numSkippedShards() + numSkipped,
-                                timeProvider,
-                                connectionLookup,
-                                clusterState,
-                                aliasFilter,
-                                concreteIndexBoosts,
-                                clusters,
-                                searchRequestAttributes
-                            )
+                            (searchResponseActionListener, canMatchResult) -> {
+                                skippedByClusterAlias.forEach((cluster, count) ->
+                                    canMatchResult.skippedByClusterAlias().merge(cluster, count, Integer::sum));
+
+                                runOpenPointInTimePhase(
+                                    task,
+                                    searchRequest,
+                                    executor,
+                                    canMatchResult.iterators(),
+                                    canMatchResult.skippedByClusterAlias(),
+                                    timeProvider,
+                                    connectionLookup,
+                                    clusterState,
+                                    aliasFilter,
+                                    concreteIndexBoosts,
+                                    clusters,
+                                    searchRequestAttributes
+                                );
+                            }
                         )
                     );
             } else {
@@ -356,7 +361,7 @@ public class TransportOpenPointInTimeAction extends HandledTransportAction<OpenP
                     searchRequest,
                     executor,
                     shardIterators,
-                    numSkipped,
+                    skippedByClusterAlias,
                     timeProvider,
                     connectionLookup,
                     clusterState,
@@ -373,7 +378,7 @@ public class TransportOpenPointInTimeAction extends HandledTransportAction<OpenP
             SearchRequest searchRequest,
             Executor executor,
             List<SearchShardIterator> shardIterators,
-            int numSkipped,
+            Map<String, Integer> skippedByClusterAlias,
             TransportSearchAction.SearchTimeProvider timeProvider,
             BiFunction<String, String, Transport.Connection> connectionLookup,
             ClusterState clusterState,
@@ -398,7 +403,7 @@ public class TransportOpenPointInTimeAction extends HandledTransportAction<OpenP
                 searchRequest,
                 listener,
                 shardIterators,
-                numSkipped,
+                skippedByClusterAlias,
                 timeProvider,
                 clusterState,
                 task,

@@ -180,11 +180,11 @@ public class CanMatchPreFilterSearchPhaseTests extends ESTestCase {
                 assertFalse(i.skip());
             }
         } else if (shard1 == false && shard2 == false) {
-            assertEquals(2, result.get().numSkippedShards());
+            assertEquals(2, result.get().skippedByClusterAlias().values().stream().mapToInt(Integer::intValue).sum());
             assertEquals(0, result.get().iterators().size());
         } else {
             assertEquals(shard1 ? 0 : 1, result.get().iterators().get(0).shardId().id());
-            assertEquals(1, result.get().numSkippedShards());
+            assertEquals(1, result.get().skippedByClusterAlias().values().stream().mapToInt(Integer::intValue).sum());
         }
     }
 
@@ -273,10 +273,10 @@ public class CanMatchPreFilterSearchPhaseTests extends ESTestCase {
             assertFalse(result.get().iterators().get(1).skip()); // never skip the failure
             assertEquals(0, result.get().iterators().get(0).shardId().id());
             assertEquals(1, result.get().iterators().get(1).shardId().id());
-            assertEquals(0, result.get().numSkippedShards());
+            assertEquals(0, result.get().skippedByClusterAlias().values().stream().mapToInt(Integer::intValue).sum());
         } else {
             assertEquals(shard1 ? 2 : 1, result.get().iterators().size());
-            assertEquals(shard1 ? 0 : 1, result.get().numSkippedShards());
+            assertEquals(shard1 ? 0 : 1, result.get().skippedByClusterAlias().values().stream().mapToInt(Integer::intValue).sum());
         }
         assertFalse(result.get().iterators().get(0).skip()); // never skip the failure
     }
@@ -481,7 +481,8 @@ public class CanMatchPreFilterSearchPhaseTests extends ESTestCase {
                     assertThat(i.shardId().id(), equalTo(shardId++));
                 }
             }
-            assertThat(result.get().iterators().size() + result.get().numSkippedShards(), equalTo(numShards));
+            int numSkipped = result.get().skippedByClusterAlias().values().stream().mapToInt(Integer::intValue).sum();
+            assertThat(result.get().iterators().size() + numSkipped, equalTo(numShards));
         }
     }
 
@@ -569,7 +570,6 @@ public class CanMatchPreFilterSearchPhaseTests extends ESTestCase {
             List.of(),
             null,
             (canMatchResult, requests) -> {
-                var numSkippedShards = canMatchResult.numSkippedShards();
                 var nonSkippedShards = canMatchResult.iterators()
                     .stream()
                     .filter(searchShardIterator -> searchShardIterator.skip() == false)
@@ -626,8 +626,6 @@ public class CanMatchPreFilterSearchPhaseTests extends ESTestCase {
             List.of(),
             null,
             (canMatchResult, requests) -> {
-                var numSkippedShards = canMatchResult.numSkippedShards();
-
                 List<SearchShardIterator> nonSkippedShards = canMatchResult.iterators()
                     .stream()
                     .filter(searchShardIterator -> searchShardIterator.skip() == false)
@@ -709,7 +707,7 @@ public class CanMatchPreFilterSearchPhaseTests extends ESTestCase {
             List.of(),
             null,
             (canMatchResult, requests) -> {
-                var numSkippedShards = canMatchResult.numSkippedShards();
+                var numSkippedShards = canMatchResult.skippedByClusterAlias().values().stream().mapToInt(Integer::intValue).sum();
                 List<SearchShardIterator> nonSkippedShards = canMatchResult.iterators()
                     .stream()
                     .filter(searchShardIterator -> searchShardIterator.skip() == false)
@@ -1176,7 +1174,6 @@ public class CanMatchPreFilterSearchPhaseTests extends ESTestCase {
                 warmIndices,
                 false,
                 (canMatchResult, requests) -> {
-                    var numSkippedShards = canMatchResult.numSkippedShards();
                     var nonSkippedShards = canMatchResult.iterators()
                         .stream()
                         .filter(searchShardIterator -> searchShardIterator.skip() == false)
@@ -1226,7 +1223,7 @@ public class CanMatchPreFilterSearchPhaseTests extends ESTestCase {
     }
 
     private void assertAllShardsAreQueried(CanMatchPreFilterSearchPhase.CanMatchResult canMatchResult, List<ShardSearchRequest> requests) {
-        int skippedShards = canMatchResult.numSkippedShards();
+        int skippedShards = canMatchResult.skippedByClusterAlias().values().stream().mapToInt(Integer::intValue).sum();
 
         assertThat(skippedShards, equalTo(0));
 

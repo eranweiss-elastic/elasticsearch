@@ -555,7 +555,7 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
                                     // Notify the progress listener that a CCS with minimize_roundtrips is happening remote-only (no local
                                     // shards)
                                     task.getProgressListener()
-                                        .notifyListShards(Collections.emptyList(), Collections.emptyList(), clusters, false, timeProvider);
+                                        .notifyListShards(Collections.emptyList(), Collections.emptyMap(), clusters, false, timeProvider);
                                 }
                                 ccsRemoteReduce(
                                     task,
@@ -1806,7 +1806,7 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
             searchRequest,
             asyncSearchExecutor,
             shardIterators,
-            0,
+            new HashMap<>(0),
             timeProvider,
             connectionLookup,
             projectState.cluster(),
@@ -1925,7 +1925,7 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
             SearchRequest searchRequest,
             Executor executor,
             List<SearchShardIterator> shardIterators,
-            int numSkipped,
+            Map<String, Integer> skippedByClusterAlias,
             SearchTimeProvider timeProvider,
             BiFunction<String, String, Transport.Connection> connectionLookup,
             ClusterState clusterState,
@@ -1951,7 +1951,7 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
             SearchRequest searchRequest,
             Executor executor,
             List<SearchShardIterator> shardIterators,
-            int numSkipped,
+            Map<String, Integer> skippedByClusterAlias,
             SearchTimeProvider timeProvider,
             BiFunction<String, String, Transport.Connection> connectionLookup,
             ClusterState clusterState,
@@ -1983,22 +1983,26 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
                 )
                     .addListener(
                         listener.delegateFailureAndWrap(
-                            (l, canMatchResult) -> runNewSearchPhase(
-                                task,
-                                searchRequest,
-                                executor,
-                                canMatchResult.iterators(),
-                                canMatchResult.numSkippedShards() + numSkipped,
-                                timeProvider,
-                                connectionLookup,
-                                clusterState,
-                                aliasFilter,
-                                concreteIndexBoosts,
-                                false,
-                                threadPool,
-                                clusters,
-                                searchRequestAttributes
-                            )
+                            (l, canMatchResult) -> {
+                                skippedByClusterAlias.forEach((cluster, count) ->
+                                    canMatchResult.skippedByClusterAlias().merge(cluster, count, Integer::sum));
+                                runNewSearchPhase(
+                                    task,
+                                    searchRequest,
+                                    executor,
+                                    canMatchResult.iterators(),
+                                    canMatchResult.skippedByClusterAlias(),
+                                    timeProvider,
+                                    connectionLookup,
+                                    clusterState,
+                                    aliasFilter,
+                                    concreteIndexBoosts,
+                                    false,
+                                    threadPool,
+                                    clusters,
+                                    searchRequestAttributes
+                                );
+                            }
                         )
                     );
                 return;
@@ -2037,7 +2041,7 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
                         searchRequest,
                         listener,
                         shardIterators,
-                        numSkipped,
+                        skippedByClusterAlias,
                         timeProvider,
                         clusterState,
                         task,
@@ -2062,7 +2066,7 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
                         searchRequest,
                         listener,
                         shardIterators,
-                        numSkipped,
+                        skippedByClusterAlias,
                         timeProvider,
                         clusterState,
                         task,
