@@ -331,30 +331,26 @@ public class TransportOpenPointInTimeAction extends HandledTransportAction<OpenP
                     searchService.getCoordinatorRewriteContextProvider(timeProvider::absoluteStartMillis),
                     searchResponseMetrics,
                     searchRequestAttributes
-                )
-                    .addListener(
-                        listener.delegateFailureAndWrap(
-                            (searchResponseActionListener, canMatchResult) -> {
-                                skippedByClusterAlias.forEach((cluster, count) ->
-                                    canMatchResult.skippedByClusterAlias().merge(cluster, count, Integer::sum));
-
-                                runOpenPointInTimePhase(
-                                    task,
-                                    searchRequest,
-                                    executor,
-                                    canMatchResult.iterators(),
-                                    canMatchResult.skippedByClusterAlias(),
-                                    timeProvider,
-                                    connectionLookup,
-                                    clusterState,
-                                    aliasFilter,
-                                    concreteIndexBoosts,
-                                    clusters,
-                                    searchRequestAttributes
-                                );
-                            }
-                        )
+                ).addListener(listener.delegateFailureAndWrap((searchResponseActionListener, canMatchResult) -> {
+                    skippedByClusterAlias.forEach(
+                        (cluster, count) -> canMatchResult.skippedByClusterAlias().merge(cluster, count, Integer::sum)
                     );
+
+                    runOpenPointInTimePhase(
+                        task,
+                        searchRequest,
+                        executor,
+                        canMatchResult.iterators(),
+                        canMatchResult.skippedByClusterAlias(),
+                        timeProvider,
+                        connectionLookup,
+                        clusterState,
+                        aliasFilter,
+                        concreteIndexBoosts,
+                        clusters,
+                        searchRequestAttributes
+                    );
+                }));
             } else {
                 runOpenPointInTimePhase(
                     task,

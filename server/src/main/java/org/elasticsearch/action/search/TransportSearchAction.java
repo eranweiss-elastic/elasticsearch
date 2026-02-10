@@ -1980,31 +1980,27 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
                     searchService.getCoordinatorRewriteContextProvider(timeProvider::absoluteStartMillis),
                     searchResponseMetrics,
                     searchRequestAttributes
-                )
-                    .addListener(
-                        listener.delegateFailureAndWrap(
-                            (l, canMatchResult) -> {
-                                skippedByClusterAlias.forEach((cluster, count) ->
-                                    canMatchResult.skippedByClusterAlias().merge(cluster, count, Integer::sum));
-                                runNewSearchPhase(
-                                    task,
-                                    searchRequest,
-                                    executor,
-                                    canMatchResult.iterators(),
-                                    canMatchResult.skippedByClusterAlias(),
-                                    timeProvider,
-                                    connectionLookup,
-                                    clusterState,
-                                    aliasFilter,
-                                    concreteIndexBoosts,
-                                    false,
-                                    threadPool,
-                                    clusters,
-                                    searchRequestAttributes
-                                );
-                            }
-                        )
+                ).addListener(listener.delegateFailureAndWrap((l, canMatchResult) -> {
+                    skippedByClusterAlias.forEach(
+                        (cluster, count) -> canMatchResult.skippedByClusterAlias().merge(cluster, count, Integer::sum)
                     );
+                    runNewSearchPhase(
+                        task,
+                        searchRequest,
+                        executor,
+                        canMatchResult.iterators(),
+                        canMatchResult.skippedByClusterAlias(),
+                        timeProvider,
+                        connectionLookup,
+                        clusterState,
+                        aliasFilter,
+                        concreteIndexBoosts,
+                        false,
+                        threadPool,
+                        clusters,
+                        searchRequestAttributes
+                    );
+                }));
                 return;
             }
             // for synchronous CCS minimize_roundtrips=false, use the CCSSingleCoordinatorSearchProgressListener
