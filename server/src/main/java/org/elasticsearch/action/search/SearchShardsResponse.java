@@ -36,6 +36,7 @@ import java.util.Objects;
  */
 public final class SearchShardsResponse extends ActionResponse {
     private final Collection<SearchShardsGroup> groups;
+    private final int numSkippedShards;
     private final Collection<DiscoveryNode> nodes;
     private final Map<String, AliasFilter> aliasFilters;
     private final ResolvedIndexExpressions resolvedIndexExpressions;
@@ -45,11 +46,13 @@ public final class SearchShardsResponse extends ActionResponse {
 
     public SearchShardsResponse(
         Collection<SearchShardsGroup> groups,
+        int numSkippedShards,
         Collection<DiscoveryNode> nodes,
         Map<String, AliasFilter> aliasFilters,
         @Nullable ResolvedIndexExpressions resolvedIndexExpressions
     ) {
         this.groups = groups;
+        this.numSkippedShards = numSkippedShards;
         this.nodes = nodes;
         this.aliasFilters = aliasFilters;
         this.resolvedIndexExpressions = resolvedIndexExpressions;
@@ -57,14 +60,16 @@ public final class SearchShardsResponse extends ActionResponse {
 
     public SearchShardsResponse(
         Collection<SearchShardsGroup> groups,
+        int numSkippedShards,
         Collection<DiscoveryNode> nodes,
         Map<String, AliasFilter> aliasFilters
     ) {
-        this(groups, nodes, aliasFilters, null);
+        this(groups, numSkippedShards, nodes, aliasFilters, null);
     }
 
     public SearchShardsResponse(StreamInput in) throws IOException {
         this.groups = in.readCollectionAsList(SearchShardsGroup::new);
+        this.numSkippedShards = in.readVInt();
         this.nodes = in.readCollectionAsList(DiscoveryNode::new);
         this.aliasFilters = in.readMap(AliasFilter::readFrom);
         if (in.getTransportVersion().supports(SEARCH_SHARDS_RESOLVED_INDEX_EXPRESSIONS)) {
@@ -77,6 +82,7 @@ public final class SearchShardsResponse extends ActionResponse {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeCollection(groups);
+        out.writeVInt(numSkippedShards);
         out.writeCollection(nodes);
         out.writeMap(aliasFilters, StreamOutput::writeWriteable);
         if (out.getTransportVersion().supports(SEARCH_SHARDS_RESOLVED_INDEX_EXPRESSIONS)) {
@@ -96,6 +102,13 @@ public final class SearchShardsResponse extends ActionResponse {
      */
     public Collection<SearchShardsGroup> getGroups() {
         return groups;
+    }
+
+    /**
+     * Number of skipped shards not listed in Groups
+     */
+    public int getNumSkippedShards() {
+        return numSkippedShards;
     }
 
     /**
@@ -132,7 +145,7 @@ public final class SearchShardsResponse extends ActionResponse {
         }
         List<SearchShardsGroup> groups = Arrays.stream(oldResp.getGroups()).map(SearchShardsGroup::new).toList();
         assert groups.stream().noneMatch(SearchShardsGroup::preFiltered) : "legacy responses must not have preFiltered set";
-        return new SearchShardsResponse(groups, Arrays.asList(oldResp.getNodes()), aliasFilters, oldResp.getResolvedIndexExpressions());
+        return new SearchShardsResponse(groups, 0, Arrays.asList(oldResp.getNodes()), aliasFilters, oldResp.getResolvedIndexExpressions());
     }
 
     @Override

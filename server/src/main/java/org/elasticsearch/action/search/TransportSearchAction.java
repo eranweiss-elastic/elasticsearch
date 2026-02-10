@@ -622,6 +622,10 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
                             );
                             final Map<String, AliasFilter> remoteAliasFilters;
                             final List<SearchShardIterator> remoteShardIterators;
+                            final Map<String, Integer> numSkippedShards = new HashMap<>();
+                            searchShardsResponses.forEach(
+                                (clusterName, response) -> numSkippedShards.put(clusterName, response.getNumSkippedShards())
+                            );
                             if (searchContext != null) {
                                 remoteAliasFilters = searchContext.aliasFilter();
                                 remoteShardIterators = getRemoteShardsIteratorFromPointInTime(
@@ -647,6 +651,7 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
                                 rewritten,
                                 resolvedIndices,
                                 remoteShardIterators,
+                                numSkippedShards,
                                 clusterNodeLookup,
                                 projectState,
                                 remoteAliasFilters,
@@ -1504,9 +1509,9 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
             clusters.swapCluster(
                 clusterAlias,
                 (k, v) -> new SearchResponse.Cluster.Builder(v).setStatus(SearchResponse.Cluster.Status.SUCCESSFUL)
-                    .setTotalShards(0)
-                    .setSuccessfulShards(0)
-                    .setSkippedShards(0)
+                    .setTotalShards(response.getNumSkippedShards())
+                    .setSuccessfulShards(response.getNumSkippedShards())
+                    .setSkippedShards(response.getNumSkippedShards())
                     .setFailedShards(0)
                     .setFailures(Collections.emptyList())
                     .setTook(new TimeValue(timeProvider.buildTookInMillis()))
@@ -1531,6 +1536,7 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
             searchRequest,
             resolvedIndices,
             Collections.emptyList(),
+            Collections.emptyMap(),
             (clusterName, nodeId) -> null,
             projectState,
             Collections.emptyMap(),
@@ -1701,6 +1707,7 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
         SearchRequest searchRequest,
         ResolvedIndices resolvedIndices,
         List<SearchShardIterator> remoteShardIterators,
+        Map<String, Integer> numSkippedShards,
         BiFunction<String, String, DiscoveryNode> remoteConnections,
         ProjectState projectState,
         Map<String, AliasFilter> remoteAliasMap,
@@ -1758,12 +1765,13 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
             if (localShardIterators.isEmpty()
                 && clusters != SearchResponse.Clusters.EMPTY
                 && clusters.getCluster(RemoteClusterAware.LOCAL_CLUSTER_GROUP_KEY) != null) {
+                var skipped = numSkippedShards.getOrDefault(RemoteClusterAware.LOCAL_CLUSTER_GROUP_KEY, 0);
                 clusters.swapCluster(
                     RemoteClusterAware.LOCAL_CLUSTER_GROUP_KEY,
                     (alias, v) -> new SearchResponse.Cluster.Builder(v).setStatus(SearchResponse.Cluster.Status.SUCCESSFUL)
-                        .setTotalShards(0)
-                        .setSuccessfulShards(0)
-                        .setSkippedShards(0)
+                        .setTotalShards(skipped)
+                        .setSuccessfulShards(skipped)
+                        .setSkippedShards(skipped)
                         .setFailedShards(0)
                         .setFailures(Collections.emptyList())
                         .setTook(TimeValue.timeValueMillis(0))
@@ -1818,7 +1826,7 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
             searchRequest,
             asyncSearchExecutor,
             shardIterators,
-            new HashMap<>(0),
+            numSkippedShards,
             timeProvider,
             connectionLookup,
             projectState.cluster(),

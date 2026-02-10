@@ -29,6 +29,7 @@ import org.elasticsearch.search.sort.FieldSortBuilder;
 import org.elasticsearch.search.sort.MinAndMax;
 import org.elasticsearch.search.sort.SortOrder;
 import org.elasticsearch.threadpool.ThreadPool;
+import org.elasticsearch.transport.RemoteClusterAware;
 import org.elasticsearch.transport.Transport;
 
 import java.util.ArrayList;
@@ -481,7 +482,10 @@ final class CanMatchPreFilterSearchPhase {
                 assert iter.skip() == false;
                 canMatchResult.iterators.set(iMatched++, iter);
             } else {
-                canMatchResult.skippedByClusterAlias.compute(iter.getClusterAlias(), (k, v) -> v == null ? 1 : v + 1);
+                canMatchResult.skippedByClusterAlias.compute(
+                    Objects.requireNonNullElse(iter.getClusterAlias(), RemoteClusterAware.LOCAL_CLUSTER_GROUP_KEY),
+                    (k, v) -> v == null ? 1 : v + 1
+                );
             }
         }
         // order matching shard by the natural order, so that search results will use that order
