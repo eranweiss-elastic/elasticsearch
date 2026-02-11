@@ -1271,7 +1271,6 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
                 @Override
                 void innerOnResponse(SearchShardsResponse searchShardsResponse) {
                     assert ThreadPool.assertCurrentThreadPool(ThreadPool.Names.SEARCH_COORDINATION);
-                    ccsClusterInfoUpdate(searchShardsResponse, clusters, clusterAlias, timeProvider);
                     searchShardsResponses.put(clusterAlias, searchShardsResponse);
                 }
 
@@ -1484,41 +1483,6 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
                 .setTimedOut(searchResponse.isTimedOut())
                 .build();
         });
-    }
-
-    /**
-     * Edge case ---
-     * Typically we don't need to update a Cluster object after the SearchShards API call, since the
-     * skipped shards will be passed into SearchProgressListener.onListShards.
-     * However, there is an edge case where the remote SearchShards API call returns no shards at all.
-     * So in that case, nothing for this cluster will be passed to onListShards, so we need to update
-     * the Cluster object to SUCCESSFUL status with shard counts of 0 and a filled in 'took' value.
-     *
-     * @param response from SearchShards API call to remote cluster
-     * @param clusters Clusters that the search was executed on
-     * @param clusterAlias Alias of the cluster to be updated
-     * @param timeProvider search time provider (for setting took value)
-     */
-    private static void ccsClusterInfoUpdate(
-        SearchShardsResponse response,
-        SearchResponse.Clusters clusters,
-        String clusterAlias,
-        SearchTimeProvider timeProvider
-    ) {
-        if (response.getGroups().isEmpty()) {
-            clusters.swapCluster(
-                clusterAlias,
-                (k, v) -> new SearchResponse.Cluster.Builder(v).setStatus(SearchResponse.Cluster.Status.SUCCESSFUL)
-                    .setTotalShards(response.getNumSkippedShards())
-                    .setSuccessfulShards(response.getNumSkippedShards())
-                    .setSkippedShards(response.getNumSkippedShards())
-                    .setFailedShards(0)
-                    .setFailures(Collections.emptyList())
-                    .setTook(new TimeValue(timeProvider.buildTookInMillis()))
-                    .setTimedOut(false)
-                    .build()
-            );
-        }
     }
 
     void executeLocalSearch(
