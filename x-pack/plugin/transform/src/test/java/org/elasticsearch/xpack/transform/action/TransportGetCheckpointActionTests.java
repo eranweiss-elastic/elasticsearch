@@ -51,6 +51,7 @@ public class TransportGetCheckpointActionTests extends ESTestCase {
                 new SearchShardsGroup(SHARD_B_0, List.of(NODE_1, NODE_2), false, SplitShardCountSummary.UNSET),
                 new SearchShardsGroup(SHARD_B_1, List.of(NODE_0, NODE_2), true, SplitShardCountSummary.UNSET)
             ),
+            0,
             Set.of(),
             Map.of()
         );
@@ -62,7 +63,7 @@ public class TransportGetCheckpointActionTests extends ESTestCase {
     }
 
     public void testFilterOutSkippedShards_EmptySearchShardsResponse() {
-        SearchShardsResponse searchShardsResponse = new SearchShardsResponse(Set.of(), Set.of(), Map.of());
+        SearchShardsResponse searchShardsResponse = new SearchShardsResponse(Set.of(), 0, Set.of(), Map.of());
         Map<String, Set<ShardId>> filteredNodesAndShards = TransportGetCheckpointAction.filterOutSkippedShards(
             NODES_AND_SHARDS,
             searchShardsResponse
@@ -78,6 +79,7 @@ public class TransportGetCheckpointActionTests extends ESTestCase {
                 new SearchShardsGroup(SHARD_B_0, List.of(NODE_0, NODE_2), true, SplitShardCountSummary.UNSET),
                 new SearchShardsGroup(SHARD_B_1, List.of(NODE_0, NODE_2), true, SplitShardCountSummary.UNSET)
             ),
+            0,
             Set.of(),
             Map.of()
         );
@@ -97,6 +99,7 @@ public class TransportGetCheckpointActionTests extends ESTestCase {
                 new SearchShardsGroup(SHARD_B_0, List.of(NODE_0, NODE_1, NODE_2), true, SplitShardCountSummary.UNSET),
                 new SearchShardsGroup(SHARD_B_1, List.of(NODE_0, NODE_1, NODE_2), true, SplitShardCountSummary.UNSET)
             ),
+            0,
             Set.of(),
             Map.of()
         );
@@ -115,6 +118,7 @@ public class TransportGetCheckpointActionTests extends ESTestCase {
                 new SearchShardsGroup(SHARD_B_1, List.of(NODE_0, NODE_2), true, SplitShardCountSummary.UNSET),
                 new SearchShardsGroup(new ShardId(INDEX_C, 0), List.of(NODE_0, NODE_1, NODE_2), true, SplitShardCountSummary.UNSET)
             ),
+            0,
             Set.of(),
             Map.of()
         );
