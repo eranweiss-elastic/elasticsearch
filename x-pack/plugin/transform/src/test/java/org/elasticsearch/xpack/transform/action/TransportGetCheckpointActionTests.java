@@ -88,18 +88,17 @@ public class TransportGetCheckpointActionTests extends ESTestCase {
             NODES_AND_SHARDS,
             searchShardsResponse
         );
-        Map<String, Set<ShardId>> expectedFilteredNodesAndShards = Map.of(NODE_0, Set.of(SHARD_A_0, SHARD_A_1, SHARD_B_0, SHARD_B_1),
-            NODE_2, Set.of(SHARD_A_0, SHARD_A_1, SHARD_B_0, SHARD_B_1));
+        Map<String, Set<ShardId>> expectedFilteredNodesAndShards = Map.of(
+            NODE_0,
+            Set.of(SHARD_A_0, SHARD_A_1, SHARD_B_0, SHARD_B_1),
+            NODE_2,
+            Set.of(SHARD_A_0, SHARD_A_1, SHARD_B_0, SHARD_B_1)
+        );
         assertThat(filteredNodesAndShards, is(equalTo(expectedFilteredNodesAndShards)));
     }
 
     public void testFilterOutSkippedShards_AllNodesEmptyAfterFiltering() {
-        SearchShardsResponse searchShardsResponse = new SearchShardsResponse(
-            Set.of(),
-            0,
-            Set.of(),
-            Map.of()
-        );
+        SearchShardsResponse searchShardsResponse = new SearchShardsResponse(Set.of(), 0, Set.of(), Map.of());
         Map<String, Set<ShardId>> filteredNodesAndShards = TransportGetCheckpointAction.filterOutSkippedShards(
             NODES_AND_SHARDS,
             searchShardsResponse
