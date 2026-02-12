@@ -394,9 +394,15 @@ public class SearchableSnapshotsCanMatchOnCoordinatorIntegTests extends BaseFroz
 
                     SearchShardsResponse searchShardsResponse = client().execute(TransportSearchShardsAction.TYPE, searchShardsRequest)
                         .actionGet();
-                    assertThat(searchShardsResponse.getGroups().size() + searchShardsResponse.getNumSkippedShards(), equalTo(indexOutsideSearchRangeShardCount));
+                    assertThat(
+                        searchShardsResponse.getGroups().size() + searchShardsResponse.getNumSkippedShards(),
+                        equalTo(indexOutsideSearchRangeShardCount)
+                    );
                     assertThat(searchShardsResponse.getNumSkippedShards(), equalTo(indexOutsideSearchRangeShardCount));
-                    assertThat(searchShardsResponse.getGroups().size(), equalTo(indexOutsideSearchRangeShardCount - indexOutsideSearchRangeShardCount));
+                    assertThat(
+                        searchShardsResponse.getGroups().size(),
+                        equalTo(indexOutsideSearchRangeShardCount - indexOutsideSearchRangeShardCount)
+                    );
                 }
             }
         }
