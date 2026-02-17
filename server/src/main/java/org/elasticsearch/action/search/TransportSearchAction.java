@@ -1790,14 +1790,15 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
             searchTransportService::getConnection
         );
         final Executor asyncSearchExecutor = asyncSearchExecutor(concreteLocalIndices);
+        final int numShardIterators = localShardIterators.size() + remoteShardIterators.size();
+        final int numSkippedTotal = numSkippedShards.values().stream().mapToInt(Integer::intValue).sum();
         final boolean preFilterSearchShards = shouldPreFilterSearchShards(
             projectState,
             searchRequest,
             concreteLocalIndices,
-            localShardIterators.size() + remoteShardIterators.size(),
+            numShardIterators + numSkippedTotal,
             defaultPreFilterShardSize
         );
-
         // CanMatch will sort iterators after coordinator filtering. If filtering isn't done, we need to sort before the next phase
         if (preFilterSearchShards == false) {
             shardIterators.sort(SearchShardIterator::compareTo);
