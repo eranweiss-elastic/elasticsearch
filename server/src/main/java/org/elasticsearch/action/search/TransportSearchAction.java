@@ -1819,8 +1819,25 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
             defaultPreFilterShardSize
         );
         // CanMatch will sort iterators after coordinator filtering. If filtering isn't done, we need to sort before the next phase
+        final List<SearchShardIterator> iteratorsForSearchPhase;
         if (preFilterSearchShards == false) {
             shardIterators.sort(SearchShardIterator::compareTo);
+            // Remote search_shards can return shards with skip=true (can-match). Exclude them from the query phase
+            // and merge their counts into numSkippedShards so the phase only receives shards that must be queried.
+            iteratorsForSearchPhase = new ArrayList<>(shardIterators.size());
+            for (SearchShardIterator it : shardIterators) {
+                if (it.skip()) {
+                    numSkippedShards.merge(
+                        Objects.requireNonNullElse(it.getClusterAlias(), RemoteClusterAware.LOCAL_CLUSTER_GROUP_KEY),
+                        1,
+                        Integer::sum
+                    );
+                } else {
+                    iteratorsForSearchPhase.add(it);
+                }
+            }
+        } else {
+            iteratorsForSearchPhase = shardIterators;
         }
 
         final Map<String, Object> searchRequestAttributes = SearchRequestAttributesExtractor.extractAttributes(
@@ -1831,7 +1848,7 @@ public class TransportSearchAction extends HandledTransportAction<SearchRequest,
             task,
             searchRequest,
             asyncSearchExecutor,
-            shardIterators,
+            iteratorsForSearchPhase,
             numSkippedShards,
             timeProvider,
             connectionLookup,

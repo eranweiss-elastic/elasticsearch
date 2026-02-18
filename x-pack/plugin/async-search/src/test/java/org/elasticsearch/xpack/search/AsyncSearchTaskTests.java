@@ -304,11 +304,7 @@ public class AsyncSearchTaskTests extends ESTestCase {
             for (int i = 0; i < numShards; i++) {
                 shards.add(new SearchShard(null, new ShardId("0", "0", 1)));
             }
-//            List<SearchShard> skippedShards = new ArrayList<>();
             int numSkippedShards = randomIntBetween(0, 10);
-//            for (int i = 0; i < numSkippedShards; i++) {
-//                skippedShards.add(new SearchShard(null, new ShardId("0", "0", 1)));
-//            }
             Map<String, Integer> skippedShards = Map.of(RemoteClusterAware.LOCAL_CLUSTER_GROUP_KEY, numSkippedShards);
             int totalShards = numShards + numSkippedShards;
 
