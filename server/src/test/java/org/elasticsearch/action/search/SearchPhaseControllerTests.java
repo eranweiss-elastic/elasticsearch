@@ -120,13 +120,17 @@ public class SearchPhaseControllerTests extends ESTestCase {
         reductions = new CopyOnWriteArrayList<>();
         searchPhaseController = new SearchPhaseController((t, agg) -> new AggregationReduceContext.Builder() {
             @Override
-            public AggregationReduceContext forPartialReduction(@org.elasticsearch.core.Nullable List<org.elasticsearch.search.SearchHits> topHitsToRelease) {
+            public AggregationReduceContext forPartialReduction(
+                @org.elasticsearch.core.Nullable List<org.elasticsearch.search.SearchHits> topHitsToRelease
+            ) {
                 reductions.add(false);
                 return new AggregationReduceContext.ForPartial(BigArrays.NON_RECYCLING_INSTANCE, null, t, agg, b -> {}, topHitsToRelease);
             }
 
             @Override
-            public AggregationReduceContext forFinalReduction(@org.elasticsearch.core.Nullable List<org.elasticsearch.search.SearchHits> topHitsToRelease) {
+            public AggregationReduceContext forFinalReduction(
+                @org.elasticsearch.core.Nullable List<org.elasticsearch.search.SearchHits> topHitsToRelease
+            ) {
                 reductions.add(true);
                 return new AggregationReduceContext.ForFinal(BigArrays.NON_RECYCLING_INSTANCE, null, t, agg, b -> {}, topHitsToRelease);
             }
