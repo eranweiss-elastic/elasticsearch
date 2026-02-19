@@ -28,6 +28,7 @@ import org.elasticsearch.core.Nullable;
 import org.elasticsearch.core.Releasable;
 import org.elasticsearch.core.Releasables;
 import org.elasticsearch.core.Tuple;
+import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.SearchPhaseResult;
 import org.elasticsearch.search.SearchService;
 import org.elasticsearch.search.SearchShardTarget;
@@ -76,6 +77,9 @@ public class QueryPhaseResultConsumer extends ArraySearchPhaseResults<SearchPhas
     private final boolean hasTopDocs;
     private final boolean hasAggs;
     private final boolean performFinalReduce;
+    private final List<SearchHits> topHitsToRelease;
+    // Set when the list is passed to ReducedQueryPhase so doClose() does not release it
+    private volatile boolean topHitsOwnershipTransferred;
 
     private final Consumer<Exception> onPartialMergeFailure;
 
@@ -128,6 +132,7 @@ public class QueryPhaseResultConsumer extends ArraySearchPhaseResults<SearchPhas
             : source.rankBuilder().buildQueryPhaseCoordinatorContext(size, from);
         this.hasTopDocs = (source == null || size != 0) && queryPhaseRankCoordinatorContext == null;
         this.hasAggs = source != null && source.aggregations() != null;
+        this.topHitsToRelease = hasAggs ? new ArrayList<>() : null;
         this.aggReduceContextBuilder = hasAggs ? controller.getReduceContext(isCanceled, source.aggregations()) : null;
         batchReduceSize = (hasAggs || hasTopDocs) ? Math.min(request.getBatchedReduceSize(), expectedResultSize) : expectedResultSize;
         topDocsStats = new TopDocsStats(request.resolveTrackTotalHitsUpTo());
@@ -137,6 +142,12 @@ public class QueryPhaseResultConsumer extends ArraySearchPhaseResults<SearchPhas
     protected synchronized void doClose() {
         assert assertFailureAndBreakerConsistent();
         releaseBuffer();
+        if (topHitsToRelease != null && !topHitsOwnershipTransferred) {
+            for (SearchHits h : topHitsToRelease) {
+                h.decRef();
+            }
+            topHitsToRelease.clear();
+        }
         circuitBreaker.addWithoutBreaking(-circuitBreakerBytes);
         circuitBreakerBytes = 0;
 
@@ -254,8 +265,8 @@ public class QueryPhaseResultConsumer extends ArraySearchPhaseResults<SearchPhas
                 // Add an estimate of the final reduce size
                 breakerSize = addEstimateAndMaybeBreak(estimateRamBytesUsedForReduce(circuitBreakerBytes));
                 AggregationReduceContext aggReduceContext = performFinalReduce
-                    ? aggReduceContextBuilder.forFinalReduction()
-                    : aggReduceContextBuilder.forPartialReduction();
+                    ? aggReduceContextBuilder.forFinalReduction(topHitsToRelease)
+                    : aggReduceContextBuilder.forPartialReduction(topHitsToRelease);
                 aggReduceContext.setHasBatchedResult(hasBatchedResults);
                 aggs = aggregate(buffer.iterator(), new Iterator<>() {
                     @Override
@@ -278,8 +289,10 @@ public class QueryPhaseResultConsumer extends ArraySearchPhaseResults<SearchPhas
                 topDocsStats,
                 numReducePhases,
                 false,
-                queryPhaseRankCoordinatorContext
+                queryPhaseRankCoordinatorContext,
+                topHitsToRelease
             );
+            topHitsOwnershipTransferred = true;
             buffer = null;
         } finally {
             // Buffer is non-null on exception
@@ -384,7 +397,7 @@ public class QueryPhaseResultConsumer extends ArraySearchPhaseResults<SearchPhas
                     toConsume.iterator(),
                     lastMerge == null ? Collections.emptyIterator() : Iterators.single(lastMerge.reducedAggs),
                     resultSetSize,
-                    aggReduceContextBuilder.forPartialReduction()
+                    aggReduceContextBuilder.forPartialReduction(topHitsToRelease)
                 )
                 : null;
             for (QuerySearchResult querySearchResult : toConsume) {

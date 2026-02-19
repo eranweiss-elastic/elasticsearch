@@ -54,6 +54,7 @@ import org.elasticsearch.common.util.concurrent.EsExecutors;
 import org.elasticsearch.common.util.concurrent.EsRejectedExecutionException;
 import org.elasticsearch.core.Booleans;
 import org.elasticsearch.core.IOUtils;
+import org.elasticsearch.core.Nullable;
 import org.elasticsearch.core.RefCounted;
 import org.elasticsearch.core.Releasable;
 import org.elasticsearch.core.Releasables;
@@ -83,6 +84,7 @@ import org.elasticsearch.indices.breaker.CircuitBreakerService;
 import org.elasticsearch.indices.cluster.IndexRemovalReason;
 import org.elasticsearch.script.FieldScript;
 import org.elasticsearch.script.ScriptService;
+import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.aggregations.AggregationInitializationException;
 import org.elasticsearch.search.aggregations.AggregationReduceContext;
 import org.elasticsearch.search.aggregations.AggregatorFactories;
@@ -2373,24 +2375,26 @@ public class SearchService extends AbstractLifecycleComponent implements IndexEv
     public AggregationReduceContext.Builder aggReduceContextBuilder(Supplier<Boolean> isCanceled, AggregatorFactories.Builder aggs) {
         return new AggregationReduceContext.Builder() {
             @Override
-            public AggregationReduceContext forPartialReduction() {
+            public AggregationReduceContext forPartialReduction(@Nullable List<SearchHits> topHitsToRelease) {
                 return new AggregationReduceContext.ForPartial(
                     bigArrays,
                     scriptService,
                     isCanceled,
                     aggs,
-                    multiBucketConsumerService.createForPartial()
+                    multiBucketConsumerService.createForPartial(),
+                    topHitsToRelease
                 );
             }
 
             @Override
-            public AggregationReduceContext forFinalReduction() {
+            public AggregationReduceContext forFinalReduction(@Nullable List<SearchHits> topHitsToRelease) {
                 return new AggregationReduceContext.ForFinal(
                     bigArrays,
                     scriptService,
                     isCanceled,
                     aggs,
-                    multiBucketConsumerService.createForFinal()
+                    multiBucketConsumerService.createForFinal(),
+                    topHitsToRelease
                 );
             }
         };

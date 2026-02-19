@@ -735,7 +735,8 @@ public abstract class AggregatorTestCase extends ESTestCase {
                         getMockScriptService(),
                         () -> false,
                         builder,
-                        b -> {}
+                        b -> {},
+                        null
                     );
                     AggregatorCollectorManager aggregatorCollectorManager = new AggregatorCollectorManager(
                         aggregatorSupplier,
@@ -759,7 +760,8 @@ public abstract class AggregatorTestCase extends ESTestCase {
                 getMockScriptService(),
                 () -> false,
                 builder,
-                b -> {}
+                b -> {},
+                null
             );
             internalAggs = new ArrayList<>(internalAggs.subList(r, toReduceSize));
             internalAggs.add(InternalAggregations.topLevelReduce(toReduce, reduceContext));
@@ -811,7 +813,8 @@ public abstract class AggregatorTestCase extends ESTestCase {
             getMockScriptService(),
             () -> cancelled,
             builder,
-            reduceBucketConsumer
+            reduceBucketConsumer,
+            null
         );
 
         @SuppressWarnings("unchecked")
@@ -989,7 +992,8 @@ public abstract class AggregatorTestCase extends ESTestCase {
                     getMockScriptService(),
                     () -> false,
                     builder,
-                    new MultiBucketConsumer(context.maxBuckets(), context.breaker())
+                    new MultiBucketConsumer(context.maxBuckets(), context.breaker()),
+                    null
                 )
             );
             @SuppressWarnings("unchecked") // We'll get a cast error in the test if we're wrong here and that is ok

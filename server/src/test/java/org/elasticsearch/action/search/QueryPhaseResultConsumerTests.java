@@ -65,26 +65,29 @@ public class QueryPhaseResultConsumerTests extends ESTestCase {
     public void setup() {
         searchPhaseController = new SearchPhaseController((t, s) -> new AggregationReduceContext.Builder() {
             @Override
-            public AggregationReduceContext forPartialReduction() {
+            public AggregationReduceContext forPartialReduction(@org.elasticsearch.core.Nullable List<org.elasticsearch.search.SearchHits> topHitsToRelease) {
                 return new AggregationReduceContext.ForPartial(
                     BigArrays.NON_RECYCLING_INSTANCE,
                     null,
                     t,
                     mock(AggregationBuilder.class),
-                    b -> {}
+                    b -> {},
+                    topHitsToRelease
                 );
             }
 
-            public AggregationReduceContext forFinalReduction() {
+            @Override
+            public AggregationReduceContext forFinalReduction(@org.elasticsearch.core.Nullable List<org.elasticsearch.search.SearchHits> topHitsToRelease) {
                 return new AggregationReduceContext.ForFinal(
                     BigArrays.NON_RECYCLING_INSTANCE,
                     null,
                     t,
                     mock(AggregationBuilder.class),
                     b -> {},
-                    PipelineAggregator.PipelineTree.EMPTY
+                    PipelineAggregator.PipelineTree.EMPTY,
+                    topHitsToRelease
                 );
-            };
+            }
         });
         threadPool = new TestThreadPool(SearchPhaseControllerTests.class.getName());
         executor = EsExecutors.newFixed(

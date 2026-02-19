@@ -16,6 +16,7 @@ import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.time.DateFormatter;
 import org.elasticsearch.common.util.BigArrays;
+import org.elasticsearch.core.Nullable;
 import org.elasticsearch.common.util.MockBigArrays;
 import org.elasticsearch.common.util.MockPageCacheRecycler;
 import org.elasticsearch.index.mapper.DateFieldMapper.Resolution;
@@ -24,6 +25,7 @@ import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.plugins.SearchPlugin;
 import org.elasticsearch.script.ScriptService;
 import org.elasticsearch.search.DocValueFormat;
+import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.SearchModule;
 import org.elasticsearch.search.aggregations.AbstractAggregationBuilder;
 import org.elasticsearch.search.aggregations.Aggregation;
@@ -76,13 +78,27 @@ public abstract class InternalAggregationTestCase<T extends InternalAggregation>
     public static AggregationReduceContext.Builder emptyReduceContextBuilder(AggregatorFactories.Builder aggs) {
         return new AggregationReduceContext.Builder() {
             @Override
-            public AggregationReduceContext forPartialReduction() {
-                return new AggregationReduceContext.ForPartial(BigArrays.NON_RECYCLING_INSTANCE, null, () -> false, aggs, b -> {});
+            public AggregationReduceContext forPartialReduction(@Nullable List<SearchHits> topHitsToRelease) {
+                return new AggregationReduceContext.ForPartial(
+                    BigArrays.NON_RECYCLING_INSTANCE,
+                    null,
+                    () -> false,
+                    aggs,
+                    b -> {},
+                    topHitsToRelease
+                );
             }
 
             @Override
-            public AggregationReduceContext forFinalReduction() {
-                return new AggregationReduceContext.ForFinal(BigArrays.NON_RECYCLING_INSTANCE, null, () -> false, aggs, b -> {});
+            public AggregationReduceContext forFinalReduction(@Nullable List<SearchHits> topHitsToRelease) {
+                return new AggregationReduceContext.ForFinal(
+                    BigArrays.NON_RECYCLING_INSTANCE,
+                    null,
+                    () -> false,
+                    aggs,
+                    b -> {},
+                    topHitsToRelease
+                );
             }
         };
     }
@@ -94,19 +110,27 @@ public abstract class InternalAggregationTestCase<T extends InternalAggregation>
     public static AggregationReduceContext.Builder mockReduceContext(AggregationBuilder agg) {
         return new AggregationReduceContext.Builder() {
             @Override
-            public AggregationReduceContext forPartialReduction() {
-                return new AggregationReduceContext.ForPartial(BigArrays.NON_RECYCLING_INSTANCE, null, () -> false, agg, b -> {});
+            public AggregationReduceContext forPartialReduction(@Nullable List<SearchHits> topHitsToRelease) {
+                return new AggregationReduceContext.ForPartial(
+                    BigArrays.NON_RECYCLING_INSTANCE,
+                    null,
+                    () -> false,
+                    agg,
+                    b -> {},
+                    topHitsToRelease
+                );
             }
 
             @Override
-            public AggregationReduceContext forFinalReduction() {
+            public AggregationReduceContext forFinalReduction(@Nullable List<SearchHits> topHitsToRelease) {
                 return new AggregationReduceContext.ForFinal(
                     BigArrays.NON_RECYCLING_INSTANCE,
                     null,
                     () -> false,
                     agg,
                     b -> {},
-                    PipelineTree.EMPTY
+                    PipelineTree.EMPTY,
+                    topHitsToRelease
                 );
             }
         };
@@ -245,7 +269,8 @@ public abstract class InternalAggregationTestCase<T extends InternalAggregation>
                 mockScriptService,
                 () -> false,
                 inputs.builder(),
-                b -> {}
+                b -> {},
+                null
             );
             @SuppressWarnings("unchecked")
             T reduced = (T) reduce(toPartialReduce, context);
@@ -277,7 +302,8 @@ public abstract class InternalAggregationTestCase<T extends InternalAggregation>
             () -> false,
             inputs.builder(),
             bucketConsumer,
-            PipelineTree.EMPTY
+            PipelineTree.EMPTY,
+            null
         );
         @SuppressWarnings("unchecked")
         T reduced = (T) reduce(toReduce, context);

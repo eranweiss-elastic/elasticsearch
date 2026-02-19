@@ -30,7 +30,9 @@ import org.elasticsearch.core.TimeValue;
 import org.elasticsearch.rest.RestStatus;
 import org.elasticsearch.rest.action.RestActions;
 import org.elasticsearch.search.SearchHits;
+import org.elasticsearch.search.aggregations.InternalAggregation;
 import org.elasticsearch.search.aggregations.InternalAggregations;
+import org.elasticsearch.search.aggregations.metrics.InternalTopHits;
 import org.elasticsearch.search.profile.SearchProfileResults;
 import org.elasticsearch.search.profile.SearchProfileShardResult;
 import org.elasticsearch.search.suggest.Suggest;
@@ -42,6 +44,7 @@ import org.elasticsearch.xcontent.ToXContentFragment;
 import org.elasticsearch.xcontent.XContentBuilder;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Iterator;
@@ -90,6 +93,9 @@ public class SearchResponse extends ActionResponse implements ChunkedToXContentO
     // only used for telemetry purposes on the coordinating node, where the search response gets created
     private transient Long timeRangeFilterFromMillis;
 
+    // SearchHits from top_hits aggs to release when this response is released.
+    private final List<SearchHits> topHitsToRelease;
+
     private final RefCounted refCounted = LeakTracker.wrap(new SimpleRefCounted());
 
     public SearchResponse(StreamInput in) throws IOException {
@@ -100,8 +106,10 @@ public class SearchResponse extends ActionResponse implements ChunkedToXContentO
             this.aggregations = InternalAggregations.readFrom(
                 DelayableWriteable.wrapWithDeduplicatorStreamInput(in, in.getTransportVersion(), in.namedWriteableRegistry())
             );
+            this.topHitsToRelease = collectTopHitsFromAggregations(this.aggregations);
         } else {
             this.aggregations = null;
+            this.topHitsToRelease = List.of();
         }
         this.suggest = in.readBoolean() ? new Suggest(in) : null;
         this.timedOut = in.readBoolean();
@@ -157,6 +165,7 @@ public class SearchResponse extends ActionResponse implements ChunkedToXContentO
             tookInMillis,
             shardFailures,
             clusters,
+            null,
             null
         );
     }
@@ -187,7 +196,8 @@ public class SearchResponse extends ActionResponse implements ChunkedToXContentO
             tookInMillis,
             shardFailures,
             clusters,
-            pointInTimeId
+            pointInTimeId,
+            searchResponseSections.transferTopHitsToRelease()
         );
         this.timeRangeFilterFromMillis = searchResponseSections.timeRangeFilterFromMillis;
     }
@@ -207,11 +217,19 @@ public class SearchResponse extends ActionResponse implements ChunkedToXContentO
         long tookInMillis,
         ShardSearchFailure[] shardFailures,
         Clusters clusters,
-        BytesReference pointInTimeId
+        BytesReference pointInTimeId,
+        @Nullable List<SearchHits> topHitsToRelease
     ) {
         this.hits = hits;
         hits.incRef();
         this.aggregations = aggregations;
+        if (topHitsToRelease != null) {
+            this.topHitsToRelease = topHitsToRelease;
+        } else if (aggregations != null) {
+            this.topHitsToRelease = collectTopHitsFromAggregations(aggregations);
+        } else {
+            this.topHitsToRelease = List.of();
+        }
         this.suggest = suggest;
         this.profileResults = profileResults;
         this.timedOut = timedOut;
@@ -230,6 +248,24 @@ public class SearchResponse extends ActionResponse implements ChunkedToXContentO
             : "SearchResponse can't have both scrollId [" + scrollId + "] and searchContextId [" + pointInTimeId + "]";
     }
 
+    // Collect SearchHits from top_hits aggregations in the tree
+    private static List<SearchHits> collectTopHitsFromAggregations(InternalAggregations aggs) {
+        List<SearchHits> out = new ArrayList<>();
+        collectTopHitsFromAggregations(aggs, out);
+        return out;
+    }
+
+    private static void collectTopHitsFromAggregations(InternalAggregations aggs, List<SearchHits> out) {
+        for (InternalAggregation agg : aggs.asList()) {
+            if (agg instanceof InternalTopHits topHits) {
+                SearchHits h = topHits.getHits();
+                h.incRef();
+                out.add(h);
+            }
+            agg.forEachBucket(sub -> collectTopHitsFromAggregations(sub, out));
+        }
+    }
+
     @Override
     public void incRef() {
         refCounted.incRef();
@@ -243,6 +279,9 @@ public class SearchResponse extends ActionResponse implements ChunkedToXContentO
     @Override
     public boolean decRef() {
         if (refCounted.decRef()) {
+            for (SearchHits h : topHitsToRelease) {
+                h.decRef();
+            }
             hits.decRef();
             return true;
         }
@@ -1227,6 +1266,7 @@ public class SearchResponse extends ActionResponse implements ChunkedToXContentO
             tookInMillisSupplier.get(),
             ShardSearchFailure.EMPTY_ARRAY,
             clusters,
+            null,
             null
         );
     }

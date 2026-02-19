@@ -139,12 +139,14 @@ public class InternalTopHits extends InternalAggregation implements TopHits {
                 }
                 assert reducedTopDocs.totalHits.relation() == Relation.EQUAL_TO;
 
+                SearchHits mergedHits = extractSearchHits(aggregations, reducedTopDocs, shardDocs, maxScore);
+                reduceContext.registerTopHitsForRelease(mergedHits);
                 return new InternalTopHits(
                     getName(),
                     getFrom(),
                     getSize(),
                     new TopDocsAndMaxScore(reducedTopDocs, maxScore),
-                    extractSearchHits(aggregations, reducedTopDocs, shardDocs, maxScore),
+                    mergedHits,
                     getMetadata()
                 );
             }
