@@ -24,11 +24,11 @@ import org.elasticsearch.test.InternalTestCluster;
 import java.io.IOException;
 
 import static org.elasticsearch.test.ESIntegTestCase.internalCluster;
+import static org.elasticsearch.test.ESTestCase.assertThat;
 import static org.elasticsearch.test.ESTestCase.safeGet;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
-import static org.junit.Assert.assertThat;
 
 /**
  * Utilities for asserting on sequence number fields at the Lucene level in integration tests.

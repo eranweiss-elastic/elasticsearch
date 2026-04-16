@@ -82,8 +82,6 @@ dependencies {
   testImplementation project(path: ':modules:user-agent')
   testImplementation project(xpackModule('esql:compute:test'))
   testImplementation('ch.obermuhlner:big-math:2.3.2')
-  testImplementation('net.nextencia:rrdiagram:0.9.4')
-  testImplementation('org.webjars.npm:fontsource__roboto-mono:4.5.7')
 
   internalClusterTestImplementation project(":modules:user-agent")
   internalClusterTestImplementation project(":modules:mapper-extras")
@@ -97,6 +95,11 @@ dependencies {
   internalClusterTestImplementation project(xpackModule('wildcard'))
   internalClusterTestImplementation project(xpackModule('mapper-version'))
   internalClusterTestImplementation project(xpackModule('mapper-aggregate-metric'))
+  internalClusterTestImplementation project(path: xpackModule('esql-datasource-csv'))
+  internalClusterTestImplementation project(path: xpackModule('esql-datasource-ndjson'))
+  internalClusterTestImplementation project(path: xpackModule('esql-datasource-compression-libs'))
+  internalClusterTestImplementation project(path: xpackModule('esql-datasource-bzip2'))
+  internalClusterTestImplementation project(path: xpackModule('esql-datasource-http'))
 }
 
 tasks.named('splitPackagesAudit').configure {
