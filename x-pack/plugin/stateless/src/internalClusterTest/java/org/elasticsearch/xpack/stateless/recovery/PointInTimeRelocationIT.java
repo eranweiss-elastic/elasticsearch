@@ -30,6 +30,8 @@ import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.core.TimeValue;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.plugins.Plugin;
+import org.elasticsearch.transport.TransportException;
+import org.elasticsearch.transport.TransportService;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchService;
 import org.elasticsearch.search.builder.PointInTimeBuilder;
@@ -1308,6 +1310,143 @@ public class PointInTimeRelocationIT extends AbstractStatelessPluginIntegTestCas
         assertClosePit(updatedPitFirst.get(), 1);
         assertClosePit(updatedPitMiddle.get(), 1);
         assertClosePit(updatedPitLast.get(), 1);
+    }
+
+    /**
+     * Regression test for a silent-wrong-count exposed in
+     * https://github.com/elastic/elasticsearch/issues/150288.
+     *
+     * <p>After a shard relocates, the source PIT context is marked via
+     * {@code PitReaderContext#relocate()} and stays in {@code SearchService.activeReaders} for a
+     * 1-second grace period. During that window a search arriving at the source node with the old
+     * PIT id encounters two problems in sequence inside {@code executeQueryPhase}:
+     * <ol>
+     *   <li>{@code SearchService.getShard} is called <em>first</em> (before
+     *       {@code findReaderContext}). Because {@code isRelocating()} is true it skips the cached
+     *       shard and falls back to {@code IndicesService}, which throws
+     *       {@code ShardNotFoundException} — the shard has already been removed by
+     *       {@code IndexService.removeShard}.</li>
+     *   <li>Were that fallback fixed to return the stored shard reference, the next step,
+     *       {@code findReaderContext}, would return the relocating context unchecked, allowing the
+     *       search to silently proceed with stale state.</li>
+     * </ol>
+     *
+     * <p>The test demonstrates the bug path deterministically: {@code ensureGreen} guarantees the
+     * shard is relocated and closed on the source node; a 2-second sleep crosses the 1-second grace
+     * period while the 30-second Reaper interval keeps the context in {@code activeReaders}; and
+     * blocking search-phase retries to the target node prevents the coordinator from masking the
+     * failure.
+     *
+     * <p>A complete fix requires two coordinated changes:
+     * <ol>
+     *   <li>In {@code getShard}: when {@code isRelocating()} is true, return
+     *       {@code readerContext.indexShard()} (the stored reference) instead of falling back to
+     *       {@code IndicesService} — so the flow reaches {@code findReaderContext}.</li>
+     *   <li>In {@code findReaderContext}: throw {@code SearchContextMissingException} when the
+     *       context {@code isRelocating()} with no outstanding refs, steering the search into the
+     *       retryable reconstruction path (which will succeed on the target node via the already-
+     *       registered relocated context).</li>
+     * </ol>
+     * Patching only {@code findReaderContext} is insufficient because the
+     * {@code getShard} fallback throws before {@code findReaderContext} is reached.
+     */
+    public void testSearchOnRelocatingPitContextReturnsCorrectHitCount() throws Exception {
+        assumeTrue("Requires pit relocation feature flag", PIT_RELOCATION_FEATURE_FLAG.isEnabled());
+
+        // Extend the Reaper interval so the relocating context is not removed from activeReaders
+        // between the sleep and the search. Default is 1 s in nodeSettings, which races with
+        // CONTEXT_RELOCATION_GRACE_TIME_MS (also 1 s). 30 s gives a wide window.
+        var testNodeSettings = Settings.builder()
+            .put(nodeSettings)
+            .put(SearchService.KEEPALIVE_INTERVAL_SETTING.getKey(), TimeValue.timeValueSeconds(30))
+            .build();
+
+        startMasterAndIndexNode(testNodeSettings);
+        var searchNodeA = startSearchNode(testNodeSettings);
+        var searchNodeB = startSearchNode(testNodeSettings);
+
+        var indexName = randomIdentifier();
+        // Single shard: all docs live on one context, so if that context's backing shard is
+        // unavailable the hit count drops to 0 — no partial-result ambiguity.
+        createIndex(indexName, indexSettings(1, 1).build());
+        ensureGreen(indexName);
+        // Pin the shard on searchNodeA so it is the predictable relocation source.
+        updateIndexSettings(Settings.builder().put("index.routing.allocation.exclude._name", searchNodeB), indexName);
+        ensureGreen(indexName);
+
+        int numDocs = randomIntBetween(5, 50);
+        indexDocs(indexName, numDocs);
+        flushAndRefresh(indexName);
+
+        var pitId = openPointInTime(indexName, TimeValue.timeValueMinutes(1)).getPointInTimeId();
+        assertNotNull(pitId);
+
+        // Sanity-check: PIT returns the correct count before relocation.
+        assertResponse(prepareSearch().setPointInTime(new PointInTimeBuilder(pitId)), resp -> assertHitCount(resp, numDocs));
+
+        // Trigger relocation off searchNodeA. ensureGreen guarantees B's shard is STARTED and
+        // A's shard is closed — context.relocate() has been called and the grace period started.
+        updateIndexSettings(Settings.builder().put("index.routing.allocation.exclude._name", searchNodeA), indexName);
+        ensureGreen(indexName);
+
+        // Sleep past the 1-second grace period so the context's isExpired() returns true,
+        // while the 30-second Reaper has not yet run to remove it from activeReaders.
+        // The source shard is gone from IndexService.shards (removed by removeShard before close),
+        // so getShard() fallback on searchNodeA throws ShardNotFoundException.
+        safeSleep(new TimeValue(2, TimeUnit.SECONDS));
+
+        // When searchNodeA fails (shard gone), the coordinator retries on searchNodeB — which
+        // succeeds, masking the bug. Block search-phase requests to searchNodeB so that the
+        // shard failure on searchNodeA is the final result. MockTransportService is installed
+        // on every node to cover whichever node coordinates the search.
+        // When searchNodeA fails (shard gone), the coordinator retries on searchNodeB — which
+        // succeeds, masking the bug. Block search-phase requests to searchNodeB so the shard
+        // failure on searchNodeA is the final result. MockTransportService is installed on every
+        // node to cover whichever node coordinates the search. The try/finally ensures rules are
+        // cleared even if the assertions below throw.
+        var targetTransport = internalCluster().getInstance(TransportService.class, searchNodeB);
+        for (var nodeName : internalCluster().getNodeNames()) {
+            if (nodeName.equals(searchNodeB) == false) {
+                MockTransportService.getInstance(nodeName).addSendBehavior(
+                    targetTransport,
+                    (connection, requestId, action, request, options) -> {
+                        if (action.startsWith("indices:data/read/search[phase/")) {
+                            throw new TransportException("search-phase request to target node blocked by test");
+                        }
+                        connection.sendRequest(requestId, action, request, options);
+                    }
+                );
+            }
+        }
+        // Track the response PIT id: if the search succeeds it may return an updated id pointing
+        // to the target node's context, which must be closed to avoid an in-flight context leak.
+        var activePitId = new AtomicReference<>(pitId);
+        try {
+            // Search with the original PIT id while the source context is isRelocating() and
+            // the source shard is gone from IndexService.
+            //
+            // Current (buggy) behaviour: getShard() falls back to IndicesService, which throws
+            // ShardNotFoundException. The coordinator retries on the target but that is blocked
+            // here, so all shards fail → assertNoFailures fires and totalHits = 0.
+            //
+            // With the complete fix (getShard returns stored shard for relocating contexts AND
+            // findReaderContext throws for relocating contexts): the retryable reconstruction
+            // path on the target node is taken and the search returns the correct count.
+            assertResponse(prepareSearch().setPointInTime(new PointInTimeBuilder(pitId)), resp -> {
+                assertNoFailures(resp);
+                assertHitCount(resp, numDocs);
+                activePitId.set(resp.pointInTimeId());
+            });
+        } finally {
+            for (var nodeName : internalCluster().getNodeNames()) {
+                if (nodeName.equals(searchNodeB) == false) {
+                    MockTransportService.getInstance(nodeName).clearAllRules();
+                }
+            }
+        }
+
+        ensureGreen(indexName);
+        closePointInTime(activePitId.get());
     }
 
     private void assertClosePit(BytesReference pitId, int expectedFreedContexts) {
