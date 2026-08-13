@@ -25,8 +25,25 @@ import java.util.Optional;
 import java.util.Set;
 
 public class StoreMetricsIndexInput extends FilterIndexInput implements DirectAccessInput {
+    /**
+     * Task-scoped {@link StoreMetrics} for the current thread, set by {@code StoreMetricsAwareExecutor}
+     * (parallel-collection workers) and by {@code SearchService} (single-slice search thread) before
+     * a search phase begins and cleared in a {@code finally} block when the phase exits.
+     *
+     * <p>When set, {@link #addBytesRead} and {@link #randomAccessSlice} use this value directly,
+     * avoiding a virtual dispatch through {@link PluggableDirectoryMetricsHolder#instance()} on every
+     * DocValues acquisition. When null (merge threads, pre-phase {@code openInput}, unbound paths),
+     * the code falls back to {@code metricHolder.instance()}.
+     *
+     * <p>Only bind a real {@link StoreMetrics} here — never the NOOP subtype — or the direct field
+     * write {@code m.bytesRead += bytes} will make NOOP counters visible in
+     * {@code buildDirectoryMetricsDelta()}.
+     */
+    public static final ThreadLocal<StoreMetrics> CURRENT_METRICS = new ThreadLocal<>();
+
     final PluggableDirectoryMetricsHolder<StoreMetrics> metricHolder;
-    private StoreMetrics cachedMetrics;
+    // package-private so randomAccessSlice() can pre-populate child.cachedMetrics without a setter
+    StoreMetrics cachedMetrics;
 
     public static IndexInput create(String resourceDescription, IndexInput in, PluggableDirectoryMetricsHolder<StoreMetrics> metricHolder) {
         if (in instanceof StoreMetricsIndexInput) {
@@ -80,8 +97,19 @@ public class StoreMetricsIndexInput extends FilterIndexInput implements DirectAc
     @Override
     public RandomAccessInput randomAccessSlice(long offset, long length) throws IOException {
         RandomAccessInput delegate = in.randomAccessSlice(offset, length);
+        // Pre-populate the child's cachedMetrics from the task-scoped ThreadLocal (when bound) so the
+        // child avoids a metricHolder.instance() call on its first read. When CURRENT_METRICS is null
+        // (merge threads, pre-phase openInput, unbound paths), leave cachedMetrics null — addBytesRead
+        // will resolve it on the reading thread via metricHolder.instance().
+        //
+        // Never mutate this.cachedMetrics here — the parent IndexInput (e.g. DocValues producer data)
+        // is shared across concurrent searches; writing to its field from randomAccessSlice() is an
+        // unsynchronised data race.
+        StoreMetrics current = CURRENT_METRICS.get();
         if (delegate instanceof IndexInput input) {
-            return new RandomAccessIndexInput(input.toString(), input, metricHolder.singleThreaded());
+            RandomAccessIndexInput copy = new RandomAccessIndexInput(input.toString(), input, metricHolder.singleThreaded());
+            copy.cachedMetrics = current;   // null when unbound — resolved lazily on first read
+            return copy;
         } else {
             return new MetricsRandomAccessInput(delegate, metricHolder.singleThreaded());
         }
@@ -119,15 +147,21 @@ public class StoreMetricsIndexInput extends FilterIndexInput implements DirectAc
         in.updateIOContext(context);
     }
 
-    private StoreMetrics metrics() {
-        if (cachedMetrics == null) {
-            cachedMetrics = metricHolder.instance();
-        }
-        return cachedMetrics;
-    }
-
     void addBytesRead(long bytes) {
-        metrics().addBytesRead(bytes);
+        StoreMetrics m = cachedMetrics;
+        if (m == null) {
+            m = CURRENT_METRICS.get();
+            if (m == null) m = metricHolder.instance();
+            if (m == null) return;
+            if (m.getClass() != StoreMetrics.class) {
+                // Subclass (e.g. NOOP): honour virtual dispatch so overrides like the empty
+                // addBytesRead() still apply. Do not cache — the next call re-resolves.
+                m.addBytesRead(bytes);
+                return;
+            }
+            cachedMetrics = m;
+        }
+        m.bytesRead += bytes;
     }
 
     @Override

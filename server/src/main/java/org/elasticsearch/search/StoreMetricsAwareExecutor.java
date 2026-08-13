@@ -10,6 +10,7 @@
 package org.elasticsearch.search;
 
 import org.elasticsearch.index.store.StoreMetrics;
+import org.elasticsearch.index.store.StoreMetricsIndexInput;
 
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.LongAdder;
@@ -35,9 +36,11 @@ public class StoreMetricsAwareExecutor implements Executor {
         executor.execute(() -> {
             final StoreMetrics workerStoreMetrics = storeMetricsSupplier.get();
             final long before = workerStoreMetrics.getBytesRead();
+            StoreMetricsIndexInput.CURRENT_METRICS.set(workerStoreMetrics);
             try {
                 runnable.run();
             } finally {
+                StoreMetricsIndexInput.CURRENT_METRICS.remove();
                 workerBytesRead.add(workerStoreMetrics.getBytesRead() - before);
             }
         });

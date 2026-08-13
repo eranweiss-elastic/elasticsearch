@@ -27,7 +27,8 @@ public class StoreMetrics implements DirectoryMetrics.PluggableMetrics<StoreMetr
         }
     );
 
-    private long bytesRead;
+    // package-private so StoreMetricsIndexInput can write directly (m.bytesRead += n) without a virtual call
+    long bytesRead;
 
     public StoreMetrics(long bytesRead) {
         this.bytesRead = bytesRead;
